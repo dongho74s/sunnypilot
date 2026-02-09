@@ -131,8 +131,8 @@ struct OnroadEvent @0xc4fa6047f024e718 {
     userBookmark @95;
     excessiveActuation @96;
     audioFeedback @97;
-    dawLevel2 @98;
-    dawLevel1 @99;
+    dawLevel2 @99;
+    dawLevel1 @100;
 
     soundsUnavailableDEPRECATED @47;
   }
