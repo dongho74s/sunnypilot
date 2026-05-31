@@ -136,7 +136,7 @@ def face_orientation_from_net(angles_desc, pos_desc, rpy_calib):
 
 
 class DriverMonitoring:
-  def __init__(self, rhd_saved=False, settings=None, always_on=False):
+  def __init__(self, rhd_saved=False, settings=None, always_on=False, monitoring_disabled=False):
     # init policy settings
     self.settings = settings if settings is not None else DRIVER_MONITOR_SETTINGS(device_type=HARDWARE.get_device_type())
 
@@ -166,6 +166,7 @@ class DriverMonitoring:
     self.dcam_uncertain_cnt = 0
     self.dcam_uncertain_alerted = False # once per drive
     self.dcam_reset_cnt = 0
+    self.monitoring_disabled = False
 
     self.params = Params()
     self.too_distracted = self.params.get_bool("DriverTooDistracted")
@@ -173,6 +174,7 @@ class DriverMonitoring:
     self._reset_awareness()
     self._set_timers(active_monitoring=True)
     self._reset_events()
+    self.set_monitoring_disabled(monitoring_disabled)
 
   def _reset_awareness(self):
     self.awareness = 1.
@@ -181,6 +183,19 @@ class DriverMonitoring:
 
   def _reset_events(self):
     self.current_events = Events()
+
+  def set_monitoring_disabled(self, disabled):
+    if self.monitoring_disabled == disabled:
+      return
+
+    self.monitoring_disabled = disabled
+    if disabled:
+      self.terminal_alert_cnt = 0
+      self.terminal_time = 0
+      self.too_distracted = False
+      self.params.remove("DriverTooDistracted")
+      self._reset_awareness()
+      self._reset_events()
 
   def _set_timers(self, active_monitoring):
     if self.active_monitoring_mode and self.awareness <= self.threshold_prompt:
@@ -326,6 +341,13 @@ class DriverMonitoring:
 
   def _update_events(self, driver_engaged, op_engaged, standstill, wrong_gear, car_speed):
     self._reset_events()
+    if self.monitoring_disabled:
+      self.terminal_alert_cnt = 0
+      self.terminal_time = 0
+      self.too_distracted = False
+      self._reset_awareness()
+      return
+
     # Block engaging until ignition cycle after max number or time of distractions
     if self.terminal_alert_cnt >= self.settings._MAX_TERMINAL_ALERTS or \
        self.terminal_time >= self.settings._MAX_TERMINAL_DURATION:
@@ -402,8 +424,8 @@ class DriverMonitoring:
     dat.driverMonitoringState = {
       "events": self.current_events.to_msg(),
       "faceDetected": self.face_detected,
-      "isDistracted": self.driver_distracted,
-      "distractedType": sum(self.distracted_types),
+      "isDistracted": False if self.monitoring_disabled else self.driver_distracted,
+      "distractedType": 0 if self.monitoring_disabled else sum(self.distracted_types),
       "awarenessStatus": self.awareness,
       "posePitchOffset": self.pose.pitch_offseter.filtered_stat.mean(),
       "posePitchValidCount": self.pose.pitch_offseter.filtered_stat.n,
