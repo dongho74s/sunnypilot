@@ -85,6 +85,38 @@ class TestMonitoring:
                     ((TEST_TIMESPAN-10-d_status.settings._DISTRACTED_TIME)/2))/DT_DMON)].names[0] == EventName.driverDistracted
     assert isinstance(d_status.awareness, float)
 
+  def test_dm_disabled_suppresses_distraction_events(self):
+    DM = DriverMonitoring(monitoring_disabled=True)
+    events = []
+    for msg in always_distracted:
+      DM._update_states(msg, [0, 0, 0], 30, True, False)
+      DM._update_events(False, True, False, False, 30)
+      events.append(DM.current_events)
+
+    self._assert_no_events(events)
+    assert DM.awareness == 1.
+    assert not DM.too_distracted
+    packet = DM.get_state_packet().driverMonitoringState
+    assert len(packet.events) == 0
+    assert packet.awarenessStatus == 1.
+    assert not packet.isDistracted
+    assert packet.distractedType == 0
+
+  def test_dm_disabled_can_be_reenabled(self):
+    DM = DriverMonitoring(monitoring_disabled=True)
+    for msg in always_distracted[:int(DISTRACTED_SECONDS_TO_RED / DT_DMON)]:
+      DM._update_states(msg, [0, 0, 0], 30, True, False)
+      DM._update_events(False, True, False, False, 30)
+
+    DM.set_monitoring_disabled(False)
+    events = []
+    for msg in always_distracted[:int(DISTRACTED_SECONDS_TO_RED / DT_DMON)]:
+      DM._update_states(msg, [0, 0, 0], 30, True, False)
+      DM._update_events(False, True, False, False, 30)
+      events.append(DM.current_events)
+
+    assert events[-1].names[0] == EventName.driverDistracted
+
   # engaged, no face detected the whole time, no action
   def test_fully_invisible_driver(self):
     events, d_status = self._run_seq(always_no_face, always_false, always_true, always_false)
@@ -267,4 +299,3 @@ def test_enabled_states(enabled_state, lat_active_state, expected):
   actual_enabled = captured_args[0]
 
   assert actual_enabled == expected, f"Expected op_engaged={expected}, but got {actual_enabled}"
-
